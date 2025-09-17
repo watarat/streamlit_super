@@ -1,3 +1,8 @@
+'''
+This is code to run in Streamlit to analyse our Super options
+Updated to github 12:00 17/09/2025
+'''
+
 
 import streamlit as st
 import pandas as pd
@@ -15,7 +20,7 @@ SBal2       = 510000
 CashBal     = 700000
 OtherAssets = 25000
 
-WithdrawTarget = 100005
+WithdrawTarget = 80005
 #define these but not used as targets - used to spread withdrawals equally
 Withdraw1Target    = 40000
 Withdraw2Target    = 39000
@@ -26,14 +31,16 @@ Age2 = 64
 Start_Age1 = 68
 Start_Age2 = 64
 
-Cash_growth_percent = 3.0
+Wages2 = 50000
+
+Cash_growth_percent = 2.9
 Super_growth_percent = 3.0
-Cost_of_living_adjust = 1.5
-Pension_time_adjust = 1.3
+Cost_of_living_adjust = 3.1
+Pension_time_adjust = 2.0
 Global_pension_scale_factor = 1.000
 
-columnIdent = ['Age1','Age2','SBal1','SBal2','CashBal','OtherAssets','SDraw1','SDraw2', 'CashDraw', 'PensionY', 'TotalDraw', 'PensionSum', 'CashInterest', 'PForce1', 'PForce2']
-politeLabels = ['RFS AGE','EW_AGE','RFS BALANCE','EW BALANCE','CASH BALANCE','OTHER ASSETS', 'RFS SUPER OUT', 'EW SUPER OUT', 'CASH OUT', 'PENSION', 'TOTAL INCOME', 'PENSION TOTAL', 'CASH INTEREST', 'FORCED RFS SUPER', 'FORCED EW SUPER']
+columnIdent = ['Age1','Age2','SBal1','SBal2','CashBal','OtherAssets','SDraw1','SDraw2', 'CashDraw', 'PensionY', 'TotalDraw', 'PensionSum', 'CashInterest', 'PForce1', 'PForce2', 'P2Wages']
+politeLabels = ['RFS AGE','EW_AGE','RFS BALANCE','EW BALANCE','CASH BALANCE','OTHER ASSETS', '1RFS SUPER OUT', '2EW SUPER OUT', 'CASH OUT', 'PENSION', 'TOTAL INCOME', 'PENSION TOTAL', 'CASH INTEREST', 'FORCED RFS SUPER', 'FORCED EW SUPER', 'EW_WAGES']
 
 def getPension(sum) :
     # returns pension amount based on total assets
@@ -56,6 +63,9 @@ def getPension(sum) :
 
 def getPensionValidAge() :
     return 68
+
+def getSGCRate() :
+    return 0.12
 
 def getMinimumSuperRate(age) :
     # spell it out to avoid confusion
@@ -90,8 +100,12 @@ def replaceDF(indexx, key, value)  :
     df1.at[indexx,key] = int(value)
 
 def scaleDF(indexx, key, scale)  :
-    # use this to initialise or fix values
+    # use this to percentahge increase current year values
     df1.at[indexx,key] =  int(df1.at[indexx,key] * float(scale))
+
+def scaleNextDF(indexx, key, scale) :
+    # use this to percentahge increase NEXT year values
+    df1.at[indexx+1,key] =  int(df1.at[indexx,key] * float(scale))
 
         
 #---- Place entities in sidebar
@@ -110,14 +124,15 @@ Age1 = scol1.slider("Person 1 Age",60,80,68)
 Age2 = scol2.slider("Person 2 Age",60,80,64)
 Start_Age1 = scol1.slider("Person 1 Start Super",Age1,80)
 Start_Age2 = scol2.slider("Person 2 Start Super",Age2,80)
+Wages2 = 1000*st.sidebar.slider("Person 2 Wages", 0, 100, int(Wages2/1000), 1, format="$%dk",help='Super calculated on this, but plotted as takehome 😠')
 
-#st.sidebar.divider()
+st.sidebar.divider()
 
 #---- Full width of side bar and populate
 WithdrawTarget = 1000*st.sidebar.slider("Desired Income pa", 20,150, int(WithdrawTarget/1000), 1, format="$%dk")
 SBal1   = 1000*st.sidebar.slider("Super Balance Person 1", 10, 700, int(SBal1/1000), 10, format="$%dk")
-SBal2   = 1000*st.sidebar.slider("Super Balance Person 2", 10, 700, int(SBal2/1000), 10, format="$%dk")
-CashBal = 1000*st.sidebar.slider("Combined Cash Balance", 10, 1000, int(CashBal/1000), 10, format="$%dk")
+SBal2   = 1000*st.sidebar.slider("Super Balance Person 2", 10, 700, int(SBal2/1000), 10, format="$%dk",help='Person 1 Super Balance at Start Age')
+CashBal = 1000*st.sidebar.slider("Combined Cash Balance", 10, 1000, int(CashBal/1000), 10, format="$%dk", help = 'Person2 Super balance at PERSON1 start age')
 
 #---- define a 2 column bit of side bar and populate
 scol1, scol2 = st.sidebar.columns(2)
@@ -163,6 +178,7 @@ Oneoff_enabled = col1.checkbox("Enable One off payment", False)
 Oneoff_Age = col2.slider("Withdrawal Age",Age1,80, Age1+3)
 Oneoff_Amount = int(1000 * st.sidebar.slider("One off withdrawal amount",100, 250, int(0), 5, format="$%dk", help='Single withdrawal at given age'))
 
+Age2Difference = Age2-Age1 # Age 2 compared to age 1, neg for younger
 
 #------- Create dataframe
 df1 = pd.DataFrame(index=np.arange(0, numOfRows), columns=columnIdent)
@@ -173,7 +189,7 @@ for i in range(0,numOfRows) :
 index = 0
 for an_age in range(table_start_age1,table_end_age1+1) :
     df1.at[index,'Age1'] = an_age
-    df1.at[index,'Age2'] = an_age + (Age2-Age1)
+    df1.at[index,'Age2'] = an_age +  Age2Difference 
     df1.at[index, 'PForce1'] = 0
     df1.at[index, 'PForce2'] = 0
     df1.at[index, 'OtherAssets'] = OtherAssets
@@ -181,12 +197,22 @@ for an_age in range(table_start_age1,table_end_age1+1) :
 # this places the initial Super balance in the starting age location
 #if the plot doesn't start till later - then the initial balance is lost 
 df1.at[Start_Age1 - table_start_age1, 'SBal1']   = SBal1
-df1.at[Start_Age2 - table_start_age1 + (Age1-Age2), 'SBal2']   = SBal2
+df1.at[Start_Age1 - table_start_age1, 'SBal2']   = SBal2
 df1.at[Start_Age1 - table_start_age1, 'CashBal'] = CashBal
 
 #--- Compose this before any values change - used at end in plot
+# if Pension_inflate_enabled == True :
+#     PensionString = f'Pension Inflated {Pension_inflate_factor:.1f}%'
+# else :
+#     PensionString = ''
+
+PensionString   =  f' Pension Inflated  {Pension_inflate_factor:.1f}%' if Pension_inflate_enabled  == True else ''
+DeflationString =  f' Deflation Enabled {Cost_of_living_factor:.1f}%' if Cost_of_living_enabled  == True else ''
+TakehomeString  =  f' Takehome Varies   {Takehome_vary_factor:.1f}%' if Takehome_vary_enabled  == True else ''
+
 ident_text = f'Desired= {WithdrawTarget:,.0f} Super1= {SBal1:,.0f}, Super2= {SBal2:,.0f} \
- Savings= {CashBal:,.0f} Other= {OtherAssets:,.0f} CashRate= {Cash_growth_percent:,.1f}%  SuperRate= {Super_growth_percent:,.1f}%'
+ Savings= {CashBal:,.0f} Other= {OtherAssets:,.0f} CashRate= {Cash_growth_percent:.1f}%  \
+ SuperRate= {Super_growth_percent:,.1f}%' + PensionString + DeflationString + TakehomeString
 
 #----- Run process loop
 index = 0
@@ -194,13 +220,9 @@ for this_age1 in range(table_start_age1, table_end_age1) :
 
     #debugging trap
     if this_age1 == 90 :
-        print(this_age1)
-    
+        pass    
 
-    #--- Here is where you do any changes for the year - e.g.
-    if this_age1 == 0 : #80   dummy  :
-        addToDF(index, 'SBal1', -100000)
-       
+    #--- Here is where you do any changes for the year
     # Bump pension up
     validAge = getPensionValidAge()
     if Pension_inflate_enabled == True and this_age1 > validAge :
@@ -228,15 +250,29 @@ for this_age1 in range(table_start_age1, table_end_age1) :
     cash_assets = df1.at[index,'SBal1'] + df1.at[index,'SBal2'] + df1.at[index,'CashBal']
     total_assets = cash_assets + df1.at[index,'OtherAssets']
     pension = 0
-    if this_age1 >= Start_Age1 or this_age1 >= Start_Age2 + (Age1-Age2):
+    if this_age1 >= Start_Age1 or this_age1 >= Start_Age2 - Age2Difference :
         pension = int(getPension(total_assets))
     
     df1.at[index,'PensionY'] = int(pension)
     if index > 0 :
         addToDF(index,'PensionSum', pension)
 
+    # Work out Person 2 Salary first
+    if this_age1 >= Start_Age1 and this_age1 < table_end_age1-1 : # StartAge1 = valid data
+        if this_age1 < Start_Age2 - Age2Difference :  # if in gap
+            replaceDF(index+1,'SBal2', df1.at[index, 'SBal2'])
+            # add in notional super payment
+            addToDF(index,'P2Wages', Wages2)
+            addToDF(index+1,'SBal2', Wages2*getSGCRate())
+
     #--- Work out how much extra we need to make up income for year
     wanted = WithdrawTarget - pension
+
+    #--- Add in wages from Person2
+    wanted = wanted - df1.at[index,'P2Wages']
+    
+
+
     # Work out ratio to take out
     Target1Avail = df1.at[index,'SBal1']
     Target2Avail = df1.at[index,'SBal2']
@@ -280,13 +316,13 @@ for this_age1 in range(table_start_age1, table_end_age1) :
             addToDF(index,'SDraw1', val)
             wanted -= val
         else :
+            replaceDF(index+1,'SBal1',0)  # force zero
             addToDF(index,'SDraw1', SBal)
             wanted -= SBal
-            replaceDF(index,'SBal1',0)  # force zero
 
     #--- Apply to Person2
     SBal = df1.at[index,'SBal2']
-    if SBal > 0 and this_age1 >= Start_Age2 + (Age1-Age2) :
+    if SBal > 0 and this_age1 >= Start_Age2 - Age2Difference  :
         val = int(Withdraw2Target ) #- pension/3)
         min_super_figure = int(SBal*getMinimumSuperRate(df1.at[index,'Age2']))
         #-- was asking for less than minimum allowed
@@ -300,9 +336,18 @@ for this_age1 in range(table_start_age1, table_end_age1) :
             addToDF(index,'SDraw2', val)
             wanted -= val
         else :
+            replaceDF(index+1,'SBal2', 0) # force zero
             addToDF(index,'SDraw2', SBal)
             wanted -= SBal
-            replaceDF(index,'SBal2', 0) # force zero
+    # else :
+    #     #super is just sitting there - bump to next year
+    #     if this_age1 >= Start_Age1 and this_age1 < table_end_age1-1 : # StartAge1 = valid data
+    #         replaceDF(index+1,'SBal2', df1.at[index, 'SBal2'])
+    #         if this_age1 < Start_Age2 - Age2Difference :
+    #             # add in notional super payment
+    #             addToDF(index+1, 'SBal2', 6000)
+
+
 
     #-- Apply to cash balance
     CBal = df1.at[index,'CashBal']
@@ -326,7 +371,7 @@ for this_age1 in range(table_start_age1, table_end_age1) :
     if this_age1 >= Start_Age1 and this_age1 < table_end_age1-1 :
         scaleDF(index+1,'SBal1', (1 + Super_growth_percent/100))
 
-    if this_age1 >= Start_Age2 +(Age1-Age2) and this_age1 < table_end_age1-1 :
+    if this_age1 >= Start_Age1 and this_age1 < table_end_age1-1 :
         scaleDF(index+1,'SBal2', (1 + Super_growth_percent/100))
 
     if this_age1 >= Start_Age1 and this_age1 < table_end_age1-1 :
@@ -343,11 +388,12 @@ df1['TotalDraw'] = df1['SDraw1'] + df1['SDraw2'] + df1['CashDraw'] + df1['Pensio
 df1.columns = politeLabels
 
 ###################  DISPLAY  ###################
-st.write('#### ' + ident_text)
+st.write('##### ' + ident_text)
+
 
 #--- First Plots
-st.bar_chart(df1,  x='RFS AGE', y=['RFS SUPER OUT', 'EW SUPER OUT', 'CASH OUT', 'PENSION'])
-st.line_chart(df1, x='RFS AGE', y=['RFS SUPER OUT', 'EW SUPER OUT', 'CASH OUT', 'PENSION', 'TOTAL INCOME'])
+st.bar_chart(df1,  x='RFS AGE', y=['1RFS SUPER OUT', '2EW SUPER OUT', 'CASH OUT', 'PENSION','EW_WAGES'],color=["#00f", "#f88", "#0af","#a0a","#f00"])
+st.line_chart(df1, x='RFS AGE', y=['1RFS SUPER OUT', '2EW SUPER OUT', 'CASH OUT', 'PENSION', 'EW_WAGES','TOTAL INCOME'],color=["#00f", "#f88", "#0af","#a0a","#f00","#0f0"])
 st.line_chart(df1, x='RFS AGE', y=['RFS BALANCE','EW BALANCE','CASH BALANCE','OTHER ASSETS'],use_container_width = True)
 
 #--- The Data Frame
