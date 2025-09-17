@@ -1,6 +1,7 @@
 '''
 This is code to run in Streamlit to analyse our Super options
-Updated to github 12:00 17/09/2025
+Updated to github 12:00 18/09/2025
+Added X axis options
 '''
 
 
@@ -40,7 +41,7 @@ Pension_time_adjust = 2.0
 Global_pension_scale_factor = 1.000
 
 columnIdent = ['Age1','Age2','SBal1','SBal2','CashBal','OtherAssets','SDraw1','SDraw2', 'CashDraw', 'PensionY', 'TotalDraw', 'PensionSum', 'CashInterest', 'PForce1', 'PForce2', 'P2Wages']
-politeLabels = ['RFS AGE','EW_AGE','RFS BALANCE','EW BALANCE','CASH BALANCE','OTHER ASSETS', '1RFS SUPER OUT', '2EW SUPER OUT', 'CASH OUT', 'PENSION', 'TOTAL INCOME', 'PENSION TOTAL', 'CASH INTEREST', 'FORCED RFS SUPER', 'FORCED EW SUPER', 'EW_WAGES']
+politeLabels = ['RFS AGE','EW AGE','RFS BALANCE','EW BALANCE','CASH BALANCE','OTHER ASSETS', 'RFS SUPER OUT', 'EW SUPER OUT', 'CASH OUT', 'PENSION', 'TOTAL INCOME', 'PENSION TOTAL', 'CASH INTEREST', 'FORCED RFS SUPER', 'FORCED EW SUPER', 'EW WAGES']
 
 def getPension(sum) :
     # returns pension amount based on total assets
@@ -149,7 +150,7 @@ numOfRows = table_end_age1 - table_start_age1 + 1 # ** recalc because we may hav
 col1, col2 = st.sidebar.columns([2, 5])
 Cost_of_living_factor = float(col2.slider("Cost of living adjustment (Deflation)",-.05, 5.0, Cost_of_living_adjust, 0.1, format="%.1f%%",
                                           help='Reduces value in super and cash to make graph\n"In Todays Dollars"'))
-Cost_of_living_enabled = col1.checkbox("Enable Asset Deflation", False)
+Cost_of_living_enabled = col1.checkbox("Enable Asset Deflation", True)
 
 Pension_inflate_factor = float(col2.slider("Pension adjustment (Inflation)",-.05, 5.0, Pension_time_adjust, 0.1, format="%.1f%%",
                                 help='Increases pension payment with time'))
@@ -207,7 +208,7 @@ df1.at[Start_Age1 - table_start_age1, 'CashBal'] = CashBal
 #     PensionString = ''
 
 PensionString   =  f' Pension Inflated  {Pension_inflate_factor:.1f}%' if Pension_inflate_enabled  == True else ''
-DeflationString =  f' Deflation Enabled {Cost_of_living_factor:.1f}%' if Cost_of_living_enabled  == True else ''
+DeflationString =  f' ***Deflation Enabled {Cost_of_living_factor:.1f}%***' if Cost_of_living_enabled  == True else ''
 TakehomeString  =  f' Takehome Varies   {Takehome_vary_factor:.1f}%' if Takehome_vary_enabled  == True else ''
 
 ident_text = f'Desired= {WithdrawTarget:,.0f} Super1= {SBal1:,.0f}, Super2= {SBal2:,.0f} \
@@ -390,15 +391,35 @@ df1.columns = politeLabels
 ###################  DISPLAY  ###################
 st.write('##### ' + ident_text)
 
+radio_vals = [":rainbow[RFS]", ":red[***EW***]", "Just Index"]
+selx = st.radio(
+    "Plot X Axis as",
+    radio_vals,
+    captions=[
+        ":rainbow[Plot by Richard's Age]",
+        ":red[Plot by Elly's Age]",
+        "Just plot Years",
+    ],
+    horizontal = True
+)
 
 #--- First Plots
-st.bar_chart(df1,  x='RFS AGE', y=['1RFS SUPER OUT', '2EW SUPER OUT', 'CASH OUT', 'PENSION','EW_WAGES'],color=["#00f", "#f88", "#0af","#a0a","#f00"])
-st.line_chart(df1, x='RFS AGE', y=['1RFS SUPER OUT', '2EW SUPER OUT', 'CASH OUT', 'PENSION', 'EW_WAGES','TOTAL INCOME'],color=["#00f", "#f88", "#0af","#a0a","#f00","#0f0"])
-st.line_chart(df1, x='RFS AGE', y=['RFS BALANCE','EW BALANCE','CASH BALANCE','OTHER ASSETS'],use_container_width = True)
+if selx == radio_vals[0] :
+    st.bar_chart(df1,  x='RFS AGE', y=['RFS SUPER OUT', 'EW SUPER OUT', 'CASH OUT', 'PENSION','EW WAGES'],color=["#00f", "#f88", "#0af","#a0a","#f00"])
+    st.line_chart(df1, x='RFS AGE', y=['RFS SUPER OUT', 'EW SUPER OUT', 'CASH OUT', 'PENSION', 'EW WAGES','TOTAL INCOME'],color=["#00f", "#f88", "#0af","#a0a","#f00","#0f0"])
+    st.line_chart(df1, x='RFS AGE', y=['RFS BALANCE','EW BALANCE','CASH BALANCE','OTHER ASSETS'],use_container_width = True)
+elif selx == radio_vals[1] :
+    st.bar_chart(df1,  x='EW AGE', y=['RFS SUPER OUT', 'EW SUPER OUT', 'CASH OUT', 'PENSION','EW WAGES'],color=["#00f", "#f88", "#0af","#a0a","#f00"])
+    st.line_chart(df1, x='EW AGE', y=['RFS SUPER OUT', 'EW SUPER OUT', 'CASH OUT', 'PENSION', 'EW WAGES','TOTAL INCOME'],color=["#00f", "#f88", "#0af","#a0a","#f00","#0f0"])
+    st.line_chart(df1, x='EW AGE', y=['RFS BALANCE','EW BALANCE','CASH BALANCE','OTHER ASSETS'],use_container_width = True)
+else :
+    st.bar_chart(df1,   y=['RFS SUPER OUT', 'EW SUPER OUT', 'CASH OUT', 'PENSION','EW WAGES'],color=["#00f", "#f88", "#0af","#a0a","#f00"])
+    st.line_chart(df1,  y=['RFS SUPER OUT', 'EW SUPER OUT', 'CASH OUT', 'PENSION', 'EW WAGES','TOTAL INCOME'],color=["#00f", "#f88", "#0af","#a0a","#f00","#0f0"])
+    st.line_chart(df1,  y=['RFS BALANCE','EW BALANCE','CASH BALANCE','OTHER ASSETS'],use_container_width = True)
 
 #--- The Data Frame
 df_styled = df1.style.format( 
-    #{   #if all fields are numeric - can do formatter()
+    #{   #if all fields are numeric - can do formatter(), else name them all..
     #'PForce1':'{%s}','PForce2':'{%s}','RFSBALANCE':"{:,.0f}" }
     formatter="{:,.0f}"
 )
@@ -416,26 +437,35 @@ st.write(df_styled)
 # axs.annotate(ident_text, xy=(.015, .975), xycoords='figure fraction',
 #            horizontalalignment='left', verticalalignment='top', fontsize=12)
 # st.pyplot(fig)
+st.divider()
+st.divider()
 
-
+domain = ['RFS SUPER OUT', 'EW SUPER OUT', 'CASH OUT', 'PENSION', 'EW WAGES']
+range_ = ['red', 'green', 'blue', 'pink', 'orange']
+#range_ = ["#00f", "#f88", "#0af","#a0a","#f00"]
 #----   Bottom plot
-# data_melted = pd.melt(df1, id_vars=['RFS AGE'], value_vars=['RFS SUPER OUT', 'EW SUPER OUT', 'CASH OUT', 'PENSION'],
-#                var_name='variable', value_name='value')
-# chart = (
-    # alt.Chart(data_melted)
-    # .mark_bar()
-    # .encode(x="RFS AGE:N", y='value:Q', color = 'variable:N')
-# )
-# st.altair_chart(chart)
+data_melted = pd.melt(df1, id_vars=['RFS AGE'], value_vars=domain,
+               var_name='variable', value_name='value')
+chart = (
+    alt.Chart(data_melted)
+    .mark_bar()
+    .encode(
+        alt.X("RFS AGE:N", sort='x'),
+        #alt.X2("EW AGE:N"),
+        alt.Y('value:Q' ),
+        color = alt.Color('variable:N',  sort=None, legend=alt.Legend(orient='bottom'), \
+                scale=alt.Scale(domain=domain, range=range_))
+        
+        
+    )
+)
+st.altair_chart(chart)
 #------
 
-#chart = (  # Actually sorts the data - which is not what you want
-#    alt.Chart(data_melted).mark_bar().encode( alt.X("RFS AGE:N", sort='y'), alt.Y('value:Q'), color = 'variable:N')
+# chart = (  # Actually sorts the data - which is not what you want
+#    alt.Chart(data_melted).mark_bar().encode( alt.X("RFS AGE:N", sort='x'), alt.Y('value:Q'), alt.Color('variable:N',sort=None))
 #    # size="c", color="c", tooltip=["a", "b", "c"]
-#)
-
-#----------------------
-
-st.write(Global_pension_scale_factor)
-st.write(Pension_inflate_factor)
-st.write(Pension_inflate_enabled)
+# )
+# st.altair_chart(chart)
+# #----------------------
+# print('done')
