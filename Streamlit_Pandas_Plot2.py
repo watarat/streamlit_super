@@ -2,58 +2,51 @@
 This is code to run in Streamlit to analyse our Super options
 Updated to github 12:00 18/09/2025
 Added X axis options
-Now version 2 - diff filename
+Now version 2 - diff filename - has more stuff - frame of last compute etc
 '''
 
 
 import streamlit as st
 import pandas as pd
-import numpy as np
+#import numpy as np
 #import matplotlib.pyplot as plt
 import altair as alt
 import random
+from SuperPlot import display_barchart_plus
+from SuperPlot import display_linechart
 
 st.set_page_config(layout="wide")  # needs to be first command executed
 
+#--  Initial default values for UI
 table_end_age   = 105
-
 SBal1       = 500000
 SBal2       = 510000
 CashBal     = 700000
 OtherAssets = 25000
-
 WithdrawTarget = 80005
-#define these but not used as targets - used to spread withdrawals equally
-Withdraw1Target    = 40000
-Withdraw2Target    = 39000
-WithdrawCashTarget = 21000
-
 Age1 = 68
 Age2 = 64
 Start_Age1 = 68
 Start_Age2 = 64
-
 Wages1 = 10000
 Wages2 = 50000
-
 Cash_growth_percent = 2.9
 Super_growth_percent = 3.0
 Cost_of_living_adjust = 3.1
 Pension_time_adjust = 2.0
 Global_pension_scale_factor = 1.000
 
+# Internal names for the columns in the DataFrame - so code is general purpose
 columnIdent = ['Index','Age1','Age2','SBal1','SBal2','CashBal','OtherAssets','SDraw1','SDraw2', 'CashDraw', 'PensionY', 'TotalDraw', 'PensionSum', 'CashInterest', 'PForce1', 'PForce2', 'P1Wages', 'P2Wages', 'debug','Excess']
+# how to personalise output
 politeLabels = ['INDEX','RFS AGE','EW AGE','RFS BALANCE','EW BALANCE','CASH BALANCE','OTHER ASSETS', 'RFS SUPER OUT', 'EW SUPER OUT', 'CASH OUT', 'PENSION', 'TOTAL INCOME', 'PENSION TOTAL', 'CASH INTEREST', 'FORCED RFS SUPER', 'FORCED EW SUPER', 'RFS WAGES', 'EW WAGES','DEBUG', 'EXCESS CASH']
 
 def getPensionDual(sum) :
     # returns pension amount based on total assets
-    # PensionValidAge returns the age for person1 that data is valid for
-    # (used for when to start indexing for inflation)
     # figures for 20 Sept 2025++
     max_limit = 1074000
     min_limit = 481500
     max_amount = 1777*26
-    pensionValidAge = 68
     if sum > max_limit :
         return_val = 0
     elif sum < min_limit :
@@ -67,12 +60,9 @@ def getPensionDual(sum) :
     
 def getPensionSingle(sum) :
     # returns pension amount based on total assets
-    # PensionValidAge returns the age for person1 that data is valid for
-    # (used for when to start indexing for inflation)
     max_limit = 1074000
     min_limit = 481500
     max_amount = 1178*26
-    pensionValidAge = 68
     if sum > max_limit :
         return_val = 0
     elif sum < min_limit :
@@ -83,10 +73,6 @@ def getPensionSingle(sum) :
         return return_val * Global_pension_scale_factor
     else :
         return return_val
-
-
-def getPensionValidAge() :
-    return 68
 
 def getSGCRate() :
     return 0.12
@@ -128,34 +114,6 @@ def scaleNextDF(indexx, key, scale) :
     # use this to percentahge increase NEXT year values
     df1.at[indexx+1,key] =  int(df1.at[indexx,key] * float(scale))
 
-        
-def plot_barchart(dataframe, domain, range, column) :
-    data_melted = pd.melt(dataframe, id_vars=[column], value_vars=domain, var_name='variable', value_name='value')
-    chart = (
-        alt.Chart(data_melted).mark_bar()
-        .encode(
-            alt.X(f"{column}"+":N", sort='x'),
-            alt.Y('value:Q' ),
-            color = alt.Color('variable:N',  sort=domain, legend=alt.Legend(orient='bottom'), \
-                    scale=alt.Scale(domain=domain, range=range)),
-            order = "order:Q"  # weird - order is undefined ??, but needed - works
-        )
-    )
-    st.altair_chart(chart)    
-
-def plot_linechart(dataframe, domain, range, column) :
-    data_melted = pd.melt(dataframe, id_vars=[column], value_vars=domain, var_name='variable', value_name='value')
-    chart = (
-        alt.Chart(data_melted).mark_line()
-        .encode(
-            alt.X(f"{column}"+":N", sort='x'),
-            alt.Y('value:Q' ),
-            color = alt.Color('variable:N',  sort=domain, legend=alt.Legend(orient='bottom'), \
-                    scale=alt.Scale(domain=domain, range=range)),
-            order = "order:Q"  # weird - order is undefined ??, but needed - works
-        )
-    )
-    st.altair_chart(chart)    
 
 #------------------------------------------------------
 def process_p1p2(index) :
@@ -193,10 +151,8 @@ def process_p1p2(index) :
     CashAvail *= emphasise_cash
     totalAvail   = Target1Avail + Target2Avail + CashAvail
 
-
-
-    if index == 20 :
-        pass  # debug catch
+    # if index == 20 :
+    #     pass  # debug catch
 
     #--- process
     if totalAvail <= 0 :
@@ -285,8 +241,7 @@ def process_p1(index) :
     df1.at[index,'debug'] = 'p1'
     if index >= numOfRows-1 :
         return
-    #---
-
+    
     ##-- Pension
     cash_assets = df1.at[index,'SBal1'] + df1.at[index,'SBal2'] + df1.at[index,'CashBal']
     total_assets = cash_assets + df1.at[index,'OtherAssets']
@@ -296,12 +251,12 @@ def process_p1(index) :
 
     ##-- Target
     #--- Work out how much extra we need to make up income for year
-    wanted = WithdrawTarget - pension - Wages2 # df1.at[index,'P2Wages']  # WAGES ARE ZERO HERE - df1.at(index,'P1Wages') - df1.at(index,'P2Wages')
+    wanted = WithdrawTarget - pension - Wages2 
 
     # find minimum amounts have to withdraw
     min_super_figure = int(df1.at[index,'SBal1']*getMinimumSuperRate(df1.at[index,'Age1']))
     
-    # if we have a min figure returned - must have enough as factor is <1.00
+    # if we have a min figure returned - must have enough to take out as factor is <1.00
     if wanted <= (min_super_figure ) :
         # didnt want that much!, we're just going to have use minimum super
         addToDF(index,'PForce1', 1)  # bitmask B0
@@ -312,9 +267,6 @@ def process_p1(index) :
     CashAvail    = df1.at[index,'CashBal']
     CashAvail *= emphasise_cash
     totalAvail   = TargetAvail + CashAvail
-
-    if index == 20 :
-        pass  # debug catch
 
     #--- process
     if totalAvail <= 0 :
@@ -335,10 +287,7 @@ def process_p1(index) :
             else :
                 addToDF(index,'CashBal', -wanted)
                 pass
-
-
         else :
-
             WithdrawPTarget -= min_super_figure
 
             if WithdrawPTarget < 0 :
@@ -379,7 +328,6 @@ def process_p2(index) :
     df1.at[index,'debug'] = 'p2'
     if index >= numOfRows-1 :
         return
-    #---
 
     ##-- Pension
     cash_assets = df1.at[index,'SBal1'] + df1.at[index,'SBal2'] + df1.at[index,'CashBal']
@@ -407,9 +355,6 @@ def process_p2(index) :
     CashAvail *= emphasise_cash
     totalAvail   = TargetAvail + CashAvail
 
-    if index == 20 :
-        pass  # debug catch
-
     #--- process
     if totalAvail <= 0 :
         pass
@@ -429,10 +374,7 @@ def process_p2(index) :
             else :
                 addToDF(index,'CashBal', -wanted)
                 pass
-
-
         else :
-
             WithdrawPTarget -= min_super_figure
 
             if WithdrawPTarget < 0 :
@@ -458,8 +400,6 @@ def process_p2(index) :
                 left = df1.at[index,'CashBal']
                 addToDF(index,'CashDraw', left)  # use it all
                 replaceDF(index,'CashBal',0)   # force zero
-
-    #---
 
     addToDF(index, 'P2Wages', Wages1)
     addToDF(index+1, 'SBal1', df1.at[index,'SBal1']) # copy to new year
@@ -507,18 +447,18 @@ st.sidebar.divider()
 
 #---- Full width of side bar and populate
 WithdrawTarget = 1000*st.sidebar.slider("Desired Income pa", 20,150, int(WithdrawTarget/1000), 1, format="$%dk")
-SBal1   = 1000*st.sidebar.slider("Super Balance Person 1", 10, 700, int(SBal1/1000), 10, format="$%dk")
-SBal2   = 1000*st.sidebar.slider("Super Balance Person 2", 10, 700, int(SBal2/1000), 10, format="$%dk",help='Person 1 Super Balance at Start Age')
-CashBal = 1000*st.sidebar.slider("Combined Cash Balance", 10, 1000, int(CashBal/1000), 10, format="$%dk", help = 'Person2 Super balance at PERSON1 start age')
+SBal1   = 1000*st.sidebar.slider("Super Balance Person 1", 10, 700, int(SBal1/1000), 10,   format="$%dk", help='Person 1 Super Balance at Start of plot')
+SBal2   = 1000*st.sidebar.slider("Super Balance Person 2", 10, 700, int(SBal2/1000), 10,   format="$%dk", help='Person 2 Super Balance at Start of plot')
+CashBal = 1000*st.sidebar.slider("Combined Cash Balance", 10, 1000, int(CashBal/1000), 10, format="$%dk", help='Cash Balance at Start of plot')
 
 #---- define a 2 column bit of side bar and populate
 scol1, scol2 = st.sidebar.columns(2)
 Cash_growth_percent  = scol1.slider("Cash Interest Rate",0.0,10.0,Cash_growth_percent, 0.1, format="%.1f%%")
 Super_growth_percent = scol2.slider("Super Growth Rate",0.0,10.0,Super_growth_percent, 0.1, format="%.1f%%")
 
-st.sidebar.divider()
+table_end_age   = st.sidebar.slider("Table End Age",  80,115, table_end_age, 1, format="%dY")
 
-table_end_age   = scol2.slider("Table End Age",  90,115, table_end_age, 1, format="%dY")
+st.sidebar.write("---")
 
 # imbalanced side bar columns
 col1, col2 = st.sidebar.columns([2, 5])
@@ -568,7 +508,7 @@ Oneoff_enabled = col1.checkbox("Enable One off payment", False)
 Oneoff_Age = col2.slider("Withdrawal Age",Age1,80, Age1+3)
 Oneoff_Amount = int(1000 * st.sidebar.slider("One off withdrawal amount",100, 250, int(0), 5, format="$%dk", help='Single withdrawal at given age'))
 radio_vals = ["CASH", "PENSION1", "PENSION2", "PENSIONBOTH", "ALL"]
-suck = st.sidebar.radio(
+suck_lump_from = st.sidebar.radio(
     "Take Lump Sum from",
     radio_vals,
     captions=[
@@ -584,33 +524,22 @@ suck = st.sidebar.radio(
 
 st.sidebar.divider()
 
-radio_vals = [":rainbow[RFS]", ":red[***EW***]", "Years"]
-selx = st.sidebar.radio(
-    "Plot X Axis as",
-    radio_vals,
-    captions=[
-        ":rainbow[Plot by Richard's Age]",
-        ":red[Plot by Elly's Age]",
-        "Just plot Years",
-    ],
-    horizontal = True
-)
 
-# "---"  # modulation frame
-#
-# col1, col2, space = st.sidebar.columns([2, 2, 5])
-# Munge_Bal1 = col1.checkbox("Allow Changes to Super 1 Balance", False)
-# Munge_Bal2 = col2.checkbox("Allow Changes to Super 2 Balance", False)
+"---"  # modulation frame
+if 0 :
+    col1, col2, space = st.sidebar.columns([2, 2, 5])
+    Munge_Bal1 = col1.checkbox("Allow Changes to Super 1 Balance", False)
+    Munge_Bal2 = col2.checkbox("Allow Changes to Super 2 Balance", False)
 
-# df2 = pd.DataFrame(index=np.arange(0, numOfRows) )#, columns=columnIdent)
-# df2.loc[:,'Index'] = range(numOfRows)
-# df2.loc[:,'Age1'] = range(Age1, numOfRows+Age1)
-# df2.loc[:,'Age2'] = range(Age2, numOfRows+Age2)
-# df2.loc[:,'Super1Factor'] = 1.0
-# df2.loc[:,'Super2Factor'] = 1.0
+    df2 = pd.DataFrame(index=range(0, numOfRows) )#, columns=columnIdent)
+    df2.loc[:,'Index'] = range(numOfRows)
+    df2.loc[:,'Age1'] = range(Age1, numOfRows+Age1)
+    df2.loc[:,'Age2'] = range(Age2, numOfRows+Age2)
+    df2.loc[:,'Super1Factor'] = 1.0
+    df2.loc[:,'Super2Factor'] = 1.0
 
-# edited_df2 = st.data_editor(df2)
-# st.write('---')
+    edited_df2 = st.data_editor(df2)
+    st.write('---')
 
 ##--  End of UI setup
 
@@ -620,7 +549,7 @@ youngest = min(Age1,Age2)
 numOfRows = table_end_age - youngest
 
 #------- Create dataframe
-df1 = pd.DataFrame(index=np.arange(0, numOfRows), columns=columnIdent)
+df1 = pd.DataFrame(index=range(numOfRows), columns=columnIdent)
 for i in range(0,numOfRows) :
     df1.loc[i] = 0
 
@@ -662,7 +591,7 @@ for dfindex in range(numOfRows) :
     # One off contributions (or withdrawals)
     if Oneoff_enabled == True :
         if Oneoff_Age == df1.at[dfindex,'Age1'] :
-            match suck :
+            match suck_lump_from :
                 case 'CASH' : 
                     addToDF(dfindex, 'CashBal',  -Oneoff_Amount)
                     addToDF(dfindex, 'CashDraw',  Oneoff_Amount)
@@ -686,7 +615,6 @@ for dfindex in range(numOfRows) :
                     addToDF(dfindex, 'CashDraw', Oneoff_Amount/3)
      
     # Bump pension up
-    validAge = getPensionValidAge()
     if Pension_inflate_enabled == True :
         Global_pension_scale_factor *= (1.00 + (Pension_inflate_factor/100.0))
 
@@ -738,57 +666,41 @@ for dfindex in range(numOfRows) :
 
 
 
-##--------------   end of loop
-
+##--------------   end of loop ------------------
 
 #--- Calculate column
 df1['TotalDraw'] = df1['SDraw1'] + df1['SDraw2'] + df1['CashDraw'] + df1['PensionY'] + df1['P1Wages'] + df1['P2Wages']
 
-#--- Relabel columns for display
+##-------------  Start of display ------------------
+#--- Relabel columns for display  -- everything from here on down is indiviualised ------------- 'RFS AGE' not 'Age1' etc
 df1.columns = politeLabels
-#--- First Plots
-if selx == radio_vals[0] :
-    plot_axis = 'RFS'
-elif selx == radio_vals[1] :
-    plot_axis = 'EW'
-else :
-    plot_axis = 'YEAR'
 
 st.write('##### ' + ident_text)
 
-#Altair chart has more controls - use plotchart routines
-domain1 = ['RFS SUPER OUT', 'EW SUPER OUT', 'CASH OUT', 'PENSION', 'RFS WAGES', 'EW WAGES','EXCESS CASH']
-range1 =  ['red',           'green',        'blue',     'yellow',  'magenta',   'pink',   'yellow']
-domain2 = ['RFS SUPER OUT', 'EW SUPER OUT', 'CASH OUT', 'PENSION', 'RFS WAGES', 'EW WAGES', 'TOTAL INCOME']
-range2 =  ['red',           'green',        'blue',     'yellow',  'magenta',   'pink',      'cyan']
-domain3 = ['RFS BALANCE',   'EW BALANCE',   'CASH BALANCE','OTHER ASSETS']
-range3 =   ['red',           'green',        'blue',       'yellow']
+display_barchart_plus(st, numOfRows, Age1, Age2, df1)
+st.write('---')
+#event_data = display_linechart(df1,  2)
+display_linechart(df1,  2)
+st.write('---')
+display_linechart(df1,  3)
+st.write('---')
 
-if plot_axis == 'RFS' :
-    plot_barchart(df1,domain1, range1,'RFS AGE')
-    st.divider()
-    plot_linechart(df1,domain2, range2,'RFS AGE')
-    st.divider()
-    plot_linechart(df1,domain3, range3,'RFS AGE')
-
-elif plot_axis == 'EW' :
-    plot_barchart(df1,domain1, range1,'EW AGE')
-    plot_linechart(df1,domain2, range2,'EW AGE')
-    plot_linechart(df1,domain3, range3,'EW AGE')
-
-else :
-    plot_barchart(df1,domain1, range1,'INDEX')
-    plot_linechart(df1,domain2, range2,'INDEX')
-    plot_linechart(df1,domain3, range3,'INDEX')
-
-st.divider()
+# if event_data :
+#     filtered_df = event_data[event_data['RFS AGE'].isin(event_data['RFS AGE'])]
+#     st.write("Selected Data:", filtered_df)
+#     #print(event_data['RFS AGE'])
 
 #--- Print the Data Frame
 df_styled = df1.style.format( 
     #{   #if all fields are numeric - can do formatter(), else name them all..
-    #'PForce1':'{%s}','PForce2':'{%s}','RFSBALANCE':"{:,.0f}" }
+    #'PForce1':'{%s}','PForce2':'{%s}','RFSBALANCE':"{:,.0f}",'debug':'{%s}' } plot_ax
     #formatter="{:,.0f}"
+    thousands=','
 )
 st.write(df_styled)
 
 st.write("© TI 2025")
+
+##-------------  End of display ------------------
+
+
