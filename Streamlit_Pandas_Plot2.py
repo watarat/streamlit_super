@@ -1,9 +1,19 @@
 '''
-This is code to run in Streamlit to analyse our Super options
-Updated to github 12:00 18/09/2025
-Added X axis options
-Now version 2 - diff filename - has more stuff - frame of last compute etc
+This is code to run in Streamlit to analyse Super/Retirement options
+---
+Richard Smith Septemeber 2025
+Computed Super using figures current at >20 Sept 2025
+Some of the interface is in SuperPlot.py to strip out UI dependencies
+Figures in getPensionDual(), getPensionSingle(), getSGCRate() and getMinimumSuperRate()
+- may need to change to bring it up to date
+Update the string at end of file to match updated data
 '''
+
+
+# Calculation figures are done direct into the dataframe, with abstract headings like SBal1, Age1 etc
+# They are then replaced with 'translated names' by "df1.columns = politeLabels" later on in code
+# These are passed to the 'SuperPlot.py routines via df1.
+# SuperPlot.py also introduces some specific customisation strings.
 
 
 import streamlit as st
@@ -17,60 +27,77 @@ from SuperPlot import display_linechart
 
 st.set_page_config(layout="wide")  # needs to be first command executed
 
+
+
 #--  Initial default values for UI
 table_end_age   = 105
-SBal1       = 500000
-SBal2       = 510000
-CashBal     = 700000
-OtherAssets = 25000
+SBal1          = 500000
+SBal2          = 510000
+CashBal        = 700000
+OtherAssets    = 25000
 WithdrawTarget = 80005
-Age1 = 68
-Age2 = 64
+Age1       = 68
+Age2       = 64
 Start_Age1 = 68
 Start_Age2 = 64
-Wages1 = 10000
-Wages2 = 50000
-Cash_growth_percent = 2.9
-Super_growth_percent = 3.0
+Wages1     = 10000
+Wages2     = 50000
+Cash_growth_percent   = 2.9
+Super_growth_percent  = 3.0
 Cost_of_living_adjust = 3.1
-Pension_time_adjust = 2.0
-Global_pension_scale_factor = 1.000
+Pension_time_adjust   = 2.0
+
+changetargetA_index =  5     # Index
+changetargetA_amount = 10  # in k$
+changetargetB_index =  25
+changetargetB_amount = -15
+
+
+# Global variables
+Pension_scale_factor  = 1.000
 
 # Internal names for the columns in the DataFrame - so code is general purpose
-columnIdent = ['Index','Age1','Age2','SBal1','SBal2','CashBal','OtherAssets','SDraw1','SDraw2', 'CashDraw', 'PensionY', 'TotalDraw', 'PensionSum', 'CashInterest', 'PForce1', 'PForce2', 'P1Wages', 'P2Wages', 'debug','Excess']
+columnIdent = ['Index', 'Age1',   'Age2',  'SBal1',      'SBal2',     'CashBal',     'OtherAssets',  'SDraw1',        'SDraw2',       'CashDraw', 'PensionY', 'TotalDraw',   'PensionSum',    'Super1Interest',  'Super2Interest',  'CashInterest',  'PForce1',          'PForce2',         'P1Wages',   'P2Wages', 'debug', 'Excess']
 # how to personalise output
-politeLabels = ['INDEX','RFS AGE','EW AGE','RFS BALANCE','EW BALANCE','CASH BALANCE','OTHER ASSETS', 'RFS SUPER OUT', 'EW SUPER OUT', 'CASH OUT', 'PENSION', 'TOTAL INCOME', 'PENSION TOTAL', 'CASH INTEREST', 'FORCED RFS SUPER', 'FORCED EW SUPER', 'RFS WAGES', 'EW WAGES','DEBUG', 'EXCESS CASH']
+politeLabels = ['INDEX','RFS AGE','EW AGE','RFS BALANCE','EW BALANCE','CASH BALANCE','OTHER ASSETS', 'RFS SUPER OUT', 'EW SUPER OUT', 'CASH OUT', 'PENSION', 'TOTAL INCOME', 'PENSION TOTAL', 'SUPER1 INTEREST', 'SUPER2 INTEREST', 'CASH INTEREST', 'FORCED RFS SUPER', 'FORCED EW SUPER', 'RFS WAGES', 'EW WAGES','DEBUG', 'EXCESS CASH']
+
+Dual_pension_max_limit = 1074000
+Dual_pension_min_limit = 481500
+Dual_pension_max_amount = 1777*26
+Single_pension_max_limit = 1074000
+Single_pension_min_limit = 481500
+Single_pension_max_amount = 1178*26
 
 def getPensionDual(sum) :
     # returns pension amount based on total assets
     # figures for 20 Sept 2025++
-    max_limit = 1074000
-    min_limit = 481500
-    max_amount = 1777*26
-    if sum > max_limit :
+    global Dual_pension_max_limit
+    global Dual_pension_min_limit
+    global Dual_pension_max_amount
+    if sum > Dual_pension_max_limit :
         return_val = 0
-    elif sum < min_limit :
-        return_val = max_amount
+    elif sum < Dual_pension_min_limit :
+        return_val = Dual_pension_max_amount
     else :
-        return_val = max_amount * ((max_limit - sum) / (max_limit - min_limit))
+        return_val = Dual_pension_max_amount * ((Dual_pension_max_limit - sum) / (Dual_pension_max_limit - Dual_pension_min_limit))
     if Pension_inflate_enabled == True :
-        return return_val * Global_pension_scale_factor
+        return return_val * Pension_scale_factor
     else :
         return return_val
     
 def getPensionSingle(sum) :
     # returns pension amount based on total assets
-    max_limit = 1074000
-    min_limit = 481500
-    max_amount = 1178*26
-    if sum > max_limit :
+    global Single_pension_max_limit
+    global Single_pension_min_limit
+    global Single_pension_max_amount
+    if sum > Single_pension_max_limit :
         return_val = 0
-    elif sum < min_limit :
-        return_val = max_amount
+    elif sum < Single_pension_min_limit :
+        return_val = Single_pension_max_amount
     else :
-        return_val = max_amount * ((max_limit - sum) / (max_limit - min_limit))
+        return_val = Single_pension_max_limit * ((Single_pension_max_limit - sum) / (Single_pension_max_limit - Single_pension_min_limit))
     if Pension_inflate_enabled == True :
-        return return_val * Global_pension_scale_factor
+        return return_val * Pension_scale_factor
     else :
         return return_val
 
@@ -118,6 +145,7 @@ def scaleNextDF(indexx, key, scale) :
 #------------------------------------------------------
 def process_p1p2(index) :
 #------------------------------------------------------
+# Processes where both people are receiving pension using joint figures
     df1.at[index,'debug'] = 'p1p2'
     if index >= numOfRows-1 :
         return
@@ -238,6 +266,7 @@ def process_p1p2(index) :
 #------------------------------------------------------
 def process_p1(index) :
 #------------------------------------------------------
+# processes where only 1 person is receiving pension (p1) p2 on wages
     df1.at[index,'debug'] = 'p1'
     if index >= numOfRows-1 :
         return
@@ -325,6 +354,7 @@ def process_p1(index) :
 #------------------------------------------------------
 def process_p2(index) :
 #------------------------------------------------------
+# processes where only 1 person is receiving pension (p2) p1 on wages
     df1.at[index,'debug'] = 'p2'
     if index >= numOfRows-1 :
         return
@@ -401,7 +431,7 @@ def process_p2(index) :
                 addToDF(index,'CashDraw', left)  # use it all
                 replaceDF(index,'CashBal',0)   # force zero
 
-    addToDF(index, 'P2Wages', Wages1)
+    addToDF(index, 'P1Wages', Wages1)
     addToDF(index+1, 'SBal1', df1.at[index,'SBal1']) # copy to new year
     addToDF(index+1, 'SBal2', df1.at[index,'SBal2']) # copy to new year
     addToDF(index+1, 'CashBal', df1.at[index,'CashBal']) # copy to new year    
@@ -410,6 +440,8 @@ def process_p2(index) :
 #------------------------------------------------------
 def process_presuper(index) :
 #------------------------------------------------------
+# processes where neither person is receiving pension - both on wages
+
     df1.at[index,'debug'] = 'none'
     addToDF(index, 'P1Wages', Wages1)
     addToDF(index, 'P2Wages', Wages2)
@@ -421,42 +453,37 @@ def process_presuper(index) :
     pass
 
         
+##------------------------------------------------------
+##-------------- BEGIN UI DESCRIPTION ------------------
+
 #---- Place entities in sidebar
-st.sidebar.header("RFS Pension Code Rewrite",divider = 'grey')
+st.sidebar.header("RFS Pension Code V1.00",divider = 'rainbow')
 
-scol1, scol2 = st.sidebar.columns(2)
+with st.sidebar.expander("✔️✔️✔️😀 Age-Wages-Super 😀✔️✔️✔️  ▶️", True) :
+    st.write('---')
+    #---- define a 2 column bit of side bar and populate
+    scol1, scol2 = st.columns(2)
+    Age1 = scol1.slider("Person 1 Age",60,80,68)
+    Age2 = scol2.slider("Person 2 Age",60,80,64)
+    st.write('---')
+    Start_Age1 = scol1.slider("Person 1 Start Super",Age1,80)
+    Start_Age2 = scol2.slider("Person 2 Start Super",Age2,80)
+    Wages1 = 1000*st.slider("Person 1 Wages", 0, 100, int(Wages1/1000), 1, format="$%dk",help='Super calculated on this, but plotted as takehome 😠')
+    Wages2 = 1000*st.slider("Person 2 Wages", 0, 100, int(Wages2/1000), 1, format="$%dk",help='Super calculated on this, but plotted as takehome 😠')
+    st.write('---')
+    SBal1   = 1000*st.slider("Super Balance Person 1", 10, 700, int(SBal1/1000), 10,   format="$%dk", help='Person 1 Super Balance at Start of plot')
+    SBal2   = 1000*st.slider("Super Balance Person 2", 10, 700, int(SBal2/1000), 10,   format="$%dk", help='Person 2 Super Balance at Start of plot')
+    CashBal = 1000*st.slider("Combined Cash Balance", 10, 1000, int(CashBal/1000), 10, format="$%dk", help='Cash Balance at Start of plot')
+    st.write('---')
+    table_end_age   = st.slider("Table End Age",  80,115, table_end_age, 1, format="%dY")
 
-st.markdown("""
-    <style>
-    [data-testid=column]:nth-of-type(1) [data-testid=stVerticalBlock]{
-        gap: 0rem;
-    }
-    </style>
-    """,unsafe_allow_html=True)
 
-#---- define a 2 column bit of side bar and populate
-
-Age1 = scol1.slider("Person 1 Age",60,80,68)
-Age2 = scol2.slider("Person 2 Age",60,80,64)
-Start_Age1 = scol1.slider("Person 1 Start Super",Age1,80)
-Start_Age2 = scol2.slider("Person 2 Start Super",Age2,80)
-Wages1 = 1000*st.sidebar.slider("Person 1 Wages", 0, 100, int(Wages1/1000), 1, format="$%dk",help='Super calculated on this, but plotted as takehome 😠')
-Wages2 = 1000*st.sidebar.slider("Person 2 Wages", 0, 100, int(Wages2/1000), 1, format="$%dk",help='Super calculated on this, but plotted as takehome 😠')
-
-st.sidebar.divider()
-
-#---- Full width of side bar and populate
 WithdrawTarget = 1000*st.sidebar.slider("Desired Income pa", 20,150, int(WithdrawTarget/1000), 1, format="$%dk")
-SBal1   = 1000*st.sidebar.slider("Super Balance Person 1", 10, 700, int(SBal1/1000), 10,   format="$%dk", help='Person 1 Super Balance at Start of plot')
-SBal2   = 1000*st.sidebar.slider("Super Balance Person 2", 10, 700, int(SBal2/1000), 10,   format="$%dk", help='Person 2 Super Balance at Start of plot')
-CashBal = 1000*st.sidebar.slider("Combined Cash Balance", 10, 1000, int(CashBal/1000), 10, format="$%dk", help='Cash Balance at Start of plot')
 
 #---- define a 2 column bit of side bar and populate
 scol1, scol2 = st.sidebar.columns(2)
 Cash_growth_percent  = scol1.slider("Cash Interest Rate",0.0,10.0,Cash_growth_percent, 0.1, format="%.1f%%")
 Super_growth_percent = scol2.slider("Super Growth Rate",0.0,10.0,Super_growth_percent, 0.1, format="%.1f%%")
-
-table_end_age   = st.sidebar.slider("Table End Age",  80,115, table_end_age, 1, format="%dY")
 
 st.sidebar.write("---")
 
@@ -466,67 +493,80 @@ Cost_of_living_factor = float(col2.slider("Cost of living adjustment (Deflation)
                                           help='Reduces value in super and cash to make graph\n"In Todays Dollars"'))
 Cost_of_living_enabled = col1.checkbox("Enable Asset Deflation", True)
 
+st.sidebar.write("Check 'Asset Deflation' for future in 'Todays dollars'  \n\
+                 Check 'Pension Increases' (& prob Takehome increase) to show Actual Dollars into future.  \
+                 **Only 'Asset' or other pair at a time makes sense**")
+
+col1, col2 = st.sidebar.columns([2, 5])
+
 Pension_inflate_factor = float(col2.slider("Pension adjustment (Inflation)",-.05, 5.0, Pension_time_adjust, 0.1, format="%.1f%%",
                                 help='Increases pension payment with time'))
 Pension_inflate_enabled = col1.checkbox("Enable Pension Increases", False)
 
-st.sidebar.write("Check 'Asset Deflation' for future in 'Todays dollars'  \n\
-                 Check 'Pension Increases' to show Actual Dollars into future  \n\
-                 **Only 1 at a time makes sense**")
-st.sidebar.divider()
-
 col1, col2 = st.sidebar.columns([2, 5])
-
 Takehome_vary_factor = float(col2.slider("Takehome varies with time",-5.0, 5.0, float(0), 0.1, format="%.1f%%",
                                 help='Alters Takehome amount with time zzzzz'))
 Takehome_vary_enabled = col1.checkbox("Enable Takehome $$ Change with Time", False)
+st.sidebar.write('---')
 
-col1, col2, col3 = st.sidebar.columns([3, 2, 5])
-youngest = min(Age1,Age2) ##
-numOfRows = table_end_age - youngest  ##
-changetarget1_enable = col1.checkbox("Enable Change 1", False)
-changetarget1_age =  col2.selectbox("Index at", range(numOfRows-1))
-changetarget1_amount = 1000*col3.slider("Amount1", -100,100,0,10,"$%dk")
-col1, col2, col3 = st.sidebar.columns([3, 2, 5])
-changetarget2_enable = col1.checkbox("Enable Change 2", False)
-changetarget2_age =  col2.selectbox("Index ", range(numOfRows-1))
-changetarget2_amount = 1000*col3.slider("Amount2", -100,100,0,10,"$%dk")
+col1, col2, col3 = st.sidebar.columns([4, 4, 9])
+youngest = min(Age1,Age2)             ## calc now - as need now
+numOfRows = table_end_age - youngest  ## calc now - as need now
 
+changetargetA_enable = col1.checkbox("Enable Change A", False)
+changetargetA_index =  col2.selectbox("Index from start", range(numOfRows-1), changetargetA_index, help="By index to avoid confusion of who's age, Use 'Years' for index to see")
+changetargetA_amount = 1000*col3.slider("Amount1", -100,100,changetargetA_amount,10,"$%dk")
 
+changetargetB_enable = col1.checkbox("Enable Change B", False)
+changetargetB_index =  col2.selectbox("Index from start ", range(numOfRows-1), changetargetB_index, help="By index to avoid confusion of who's age, Use 'Years' for index to see")
+changetargetB_amount = 1000*col3.slider("Amount2", -100,100,changetargetB_amount,10,"$%dk")
 
 st.sidebar.divider()
 
 push_profit_back = st.sidebar.checkbox("Push Excess withdrawals back into Cash", False)
 emphasise_cash = st.sidebar.slider("Emphasise Getting rid of cash", 0.33, 3.0, float(1.0), 0.01, format="%.1f",
                                 help='Alters Ratio of cash to Super withdrawn')
-
-st.sidebar.divider()
-
-col1, col2 = st.sidebar.columns([2, 5])
-
-Oneoff_enabled = col1.checkbox("Enable One off payment", False)
-Oneoff_Age = col2.slider("Withdrawal Age",Age1,80, Age1+3)
-Oneoff_Amount = int(1000 * st.sidebar.slider("One off withdrawal amount",100, 250, int(0), 5, format="$%dk", help='Single withdrawal at given age'))
-radio_vals = ["CASH", "PENSION1", "PENSION2", "PENSIONBOTH", "ALL"]
-suck_lump_from = st.sidebar.radio(
-    "Take Lump Sum from",
-    radio_vals,
-    captions=[
-        ":blue[From CASH]",
-        ":red[From Pension 1]",
-        ":orange[From Pension 2]",
-        ":green[From Both Pensions]",
-        ":blue[From All]"
-    ],
-    horizontal = True
-)
-
-
 st.sidebar.divider()
 
 
-"---"  # modulation frame
+with st.sidebar.expander("✔️✔️✔️ 👍One Off withdrawals👍 ✔️✔️✔️ ▶️", True) :
+    col1, col2 = st.columns([2, 5])
+
+    Oneoff_enabled = col1.checkbox("Enable One off payment", False)
+    Oneoff_Index = col2.slider("Index from start",0, numOfRows-1, 2, help="By index to avoid confusion of who's age, Use 'Years' for index to see")
+    Oneoff_Amount = int(1000 * st.slider("One off withdrawal amount",100, 250, int(0), 5, format="$%dk", help='Single withdrawal at given age'))
+    st.write("---")
+    radio_vals = ["CASH", "PENSION1", "PENSION2", "PENSIONBOTH", "ALL"]
+    suck_lump_from = st.radio(
+        "Take Lump Sum from",
+        radio_vals,
+        captions=[
+            ":blue[From CASH]",
+            ":red[From Pension 1]",
+            ":orange[From Pension 2]",
+            ":green[From Both Pensions]",
+            ":blue[From All]"
+        ],
+        horizontal = True
+    )
+
+#--- Compose these before any values change - used at end in plot
+DeflationString =  f' ***Deflation Enabled {Cost_of_living_factor:.1f}%***,' if Cost_of_living_enabled  == True else ''
+PensionString   =  f' Pension Inflated  {Pension_inflate_factor:.1f}%,' if Pension_inflate_enabled  == True else ''
+TakehomeString  =  f' Takehome Varies   {Takehome_vary_factor:.1f}%,' if Takehome_vary_enabled  == True else ''
+PushBackString  =  f' [Excess Back to Cash]'  if push_profit_back  == True else ''
+ChangeAString  =   f' Takehome StepA {changetargetA_amount:,.0f} at index {changetargetA_index},' if changetargetA_enable  == True else ''
+ChangeBString  =   f' Takehome StepB {changetargetB_amount:,.0f} at index {changetargetB_index},' if changetargetB_enable  == True else ''
+OneOffString   =   f' OneOff Withdrawal {Oneoff_Amount:,.0f} at index {Oneoff_Index},' if Oneoff_enabled == True else ''
+
+ident_text = f'Desired= {WithdrawTarget:,.0f}, Super1= {SBal1:,.0f}, Super2= {SBal2:,.0f}, \
+  Savings= {CashBal:,.0f}, Other= {OtherAssets:,.0f}, CashRate= {Cash_growth_percent:.1f}%, \
+  SuperRate= {Super_growth_percent:,.1f}%,' + DeflationString + PensionString + TakehomeString + PushBackString \
+  + ChangeAString + ChangeBString + OneOffString
+
+
 if 0 :
+    "---"  # modulation frame start of RFS simulation of GFC
     col1, col2, space = st.sidebar.columns([2, 2, 5])
     Munge_Bal1 = col1.checkbox("Allow Changes to Super 1 Balance", False)
     Munge_Bal2 = col2.checkbox("Allow Changes to Super 2 Balance", False)
@@ -541,12 +581,12 @@ if 0 :
     edited_df2 = st.data_editor(df2)
     st.write('---')
 
-##--  End of UI setup
+##------------------------------------------------------
+##--------------- END UI DESCRIPTION -------------------
 
-
-Age2Difference = Age2-Age1 # Age 2 compared to age 1, neg for younger
-youngest = min(Age1,Age2)
-numOfRows = table_end_age - youngest
+# previously done - but logically done here
+# youngest = min(Age1,Age2)
+# numOfRows = table_end_age - youngest
 
 #------- Create dataframe
 df1 = pd.DataFrame(index=range(numOfRows), columns=columnIdent)
@@ -555,32 +595,25 @@ for i in range(0,numOfRows) :
 
 #------ Populate initial data
 
-for dfindex in range(numOfRows) :
-    df1.at[dfindex,'Age1'] = dfindex + Age1
+for dfindex in range(numOfRows) : # in loop way - or -
+#    df1.at[dfindex,'Age1'] = dfindex + Age1
     df1.at[dfindex,'Age2'] = dfindex + Age2
     df1.at[dfindex, 'PForce1'] = 0
     df1.at[dfindex, 'PForce2'] = 0
     df1.at[dfindex, 'OtherAssets'] = OtherAssets
-    df1.at[dfindex, 'Index'] = dfindex
+#    df1.at[dfindex, 'Index'] = dfindex
+# - or - native dataframe way
+df1.loc[:,'Index'] = range(numOfRows)    
+df1.loc[:,'Age1']  = range(Age1, numOfRows+Age1)
 
 # this places the initial Super balance in the starting age location
 df1.at[0, 'SBal1']   = SBal1
 df1.at[0, 'SBal2']   = SBal2
 df1.at[0, 'CashBal'] = CashBal
 
-#--- Compose these before any values change - used at end in plot
-PensionString   =  f' Pension Inflated  {Pension_inflate_factor:.1f}%' if Pension_inflate_enabled  == True else ''
-DeflationString =  f' ***Deflation Enabled {Cost_of_living_factor:.1f}%***' if Cost_of_living_enabled  == True else ''
-TakehomeString  =  f' Takehome Varies   {Takehome_vary_factor:.1f}%' if Takehome_vary_enabled  == True else ''
 
-ident_text = f'Desired= {WithdrawTarget:,.0f} Super1= {SBal1:,.0f}, Super2= {SBal2:,.0f} \
-  Savings= {CashBal:,.0f} Other= {OtherAssets:,.0f} CashRate= {Cash_growth_percent:.1f}%  \
-  SuperRate= {Super_growth_percent:,.1f}%' + PensionString + DeflationString + TakehomeString
-
-##-- Begin processing loop
-
-
-
+##----------------------------------------------
+##------- Begin processing loop ----------------
 
 for dfindex in range(numOfRows) :
 
@@ -590,7 +623,7 @@ for dfindex in range(numOfRows) :
     
     # One off contributions (or withdrawals)
     if Oneoff_enabled == True :
-        if Oneoff_Age == df1.at[dfindex,'Age1'] :
+        if Oneoff_Index == dfindex:
             match suck_lump_from :
                 case 'CASH' : 
                     addToDF(dfindex, 'CashBal',  -Oneoff_Amount)
@@ -614,11 +647,11 @@ for dfindex in range(numOfRows) :
                     addToDF(dfindex, 'CashBal', -Oneoff_Amount/3)
                     addToDF(dfindex, 'CashDraw', Oneoff_Amount/3)
      
-    # Bump pension up
+    # Bump pension up by annual increment
     if Pension_inflate_enabled == True :
-        Global_pension_scale_factor *= (1.00 + (Pension_inflate_factor/100.0))
+        Pension_scale_factor *= (1.00 + (Pension_inflate_factor/100.0))
 
-    #Devalue assets
+    # Devalue assets (Simulate inflation)
     if Cost_of_living_enabled == True :
         scaleDF(dfindex,'SBal1',   (1.00 - (Cost_of_living_factor/100.0)))
         scaleDF(dfindex,'SBal2',   (1.00 - (Cost_of_living_factor/100.0)))
@@ -632,16 +665,16 @@ for dfindex in range(numOfRows) :
     # if Munge_Bal2 == True :
     #     scaleDF(dfindex, 'SBal2', edited_df2.at[dfindex,'Super2Factor'])
 
-    # change target withdrawal amount
-    if changetarget1_enable == True :
-        if changetarget1_age == dfindex :
-            WithdrawTarget += changetarget1_amount
-    if changetarget2_enable == True :
-        if changetarget2_age == dfindex :
-            WithdrawTarget += changetarget2_amount
+    # change target withdrawal amount at 2 ages
+    if changetargetA_enable == True :
+        if changetargetA_index == dfindex :
+            WithdrawTarget += changetargetA_amount
+    if changetargetB_enable == True :
+        if changetargetB_index == dfindex :
+            WithdrawTarget += changetargetB_amount
 
-
-    if df1.at[dfindex,'Age1'] >= Start_Age1 and df1.at[dfindex,'Age2'] >= Start_Age2 :
+    # Where the main processing gets called
+    if df1.at[dfindex,'Age1']    >= Start_Age1 and df1.at[dfindex,'Age2'] >= Start_Age2 :
         process_p1p2(dfindex)
     elif df1.at[dfindex,'Age1']  >= Start_Age1 and df1.at[dfindex,'Age2']  < Start_Age2 :
         process_p1(dfindex)
@@ -650,57 +683,63 @@ for dfindex in range(numOfRows) :
     else :
         process_presuper(dfindex)
 
-    # # put it back
+    # # put it back - wrong - just placeholder
     # if Munge_Bal1 == True :
     #     df1['SBal1'] = old_bal1
 
-
     #-- Index balances for growth
     if dfindex < numOfRows-1 :
-        scaleDF(dfindex+1,'SBal1', (1 + Super_growth_percent/100))
-        scaleDF(dfindex+1,'SBal2', (1 + Super_growth_percent/100))
-        cash_inc = int(df1.at[dfindex+1,'CashBal'] * (Cash_growth_percent/100))
-        replaceDF(dfindex+1, 'CashInterest', cash_inc)
+        super1_inc =  int(df1.at[dfindex,'SBal1'] * (Super_growth_percent/100))
+        replaceDF(dfindex, 'Super1Interest', super1_inc)
+        addToDF(dfindex+1, 'SBal1', super1_inc)
+        super2_inc =  int(df1.at[dfindex,'SBal2'] * (Super_growth_percent/100))
+        replaceDF(dfindex, 'Super2Interest', super2_inc)
+        addToDF(dfindex+1, 'SBal2', super2_inc)
+
+        # scaleDF(dfindex+1,'SBal1', (1 + Super_growth_percent/100))
+        # scaleDF(dfindex+1,'SBal2', (1 + Super_growth_percent/100))
+        cash_inc = int(df1.at[dfindex,'CashBal'] * (Cash_growth_percent/100))
+        replaceDF(dfindex, 'CashInterest', cash_inc)
         addToDF(dfindex+1, 'CashBal', cash_inc)
 
+##---------------------   end of loop ------------------
+##------------------------------------------------------
 
-
-
-##--------------   end of loop ------------------
-
-#--- Calculate column
+#--- Calculate total column
 df1['TotalDraw'] = df1['SDraw1'] + df1['SDraw2'] + df1['CashDraw'] + df1['PensionY'] + df1['P1Wages'] + df1['P2Wages']
 
-##-------------  Start of display ------------------
-#--- Relabel columns for display  -- everything from here on down is indiviualised ------------- 'RFS AGE' not 'Age1' etc
-df1.columns = politeLabels
+##-----------------  Start of display ------------------
+##------------------------------------------------------
+
+#--- Relabel columns for display  
+#--- everything from here on down is indiviualised  'RFS AGE' not 'Age1' etc
+df1.columns = politeLabels  # df1 headings changed
 
 st.write('##### ' + ident_text)
 
-display_barchart_plus(st, numOfRows, Age1, Age2, df1)
+display_barchart_plus(st, numOfRows, Age1, Age2, df1) # Also does some UI output to main window
 st.write('---')
-#event_data = display_linechart(df1,  2)
-display_linechart(df1,  2)
+display_linechart(df1,  2)  # 2 = uses domain2 etc 
 st.write('---')
 display_linechart(df1,  3)
 st.write('---')
 
-# if event_data :
-#     filtered_df = event_data[event_data['RFS AGE'].isin(event_data['RFS AGE'])]
-#     st.write("Selected Data:", filtered_df)
-#     #print(event_data['RFS AGE'])
-
-#--- Print the Data Frame
+#--- Print the Data Frame - so can copy and pull into excel etc
 df_styled = df1.style.format( 
-    #{   #if all fields are numeric - can do formatter(), else name them all..
-    #'PForce1':'{%s}','PForce2':'{%s}','RFSBALANCE':"{:,.0f}",'debug':'{%s}' } plot_ax
+    #if all fields are numeric - can do formatter(), else have to name them all..
+    #'PForce1':'{%s}','PForce2':'{%s}','RFSBALANCE':"{:,.0f}",'debug':'{%s}' } 
     #formatter="{:,.0f}"
-    thousands=','
+    thousands=','  # does enough for me
 )
 st.write(df_styled)
 
-st.write("© TI 2025")
+# Has EM and en Spaces in string to make look nice
+st.write("Data valid as at 22 Sept 2025" + '  \n' + 
+         f"Dual Max   =  {Dual_pension_max_limit:,.0f},  " + f" Dual Min =  {Dual_pension_min_limit:,.0f},  " + f" Dual MaxAmount =  {Dual_pension_max_amount:,.0f}    " + '  \n' + 
+         f"Single Max =  {Single_pension_max_limit:,.0f}, " + f"Single Min =  {Single_pension_min_limit:,.0f}, " + f"Single MaxAmount =  {Single_pension_max_amount:,.0f}")
+st.write("© Richard and Elly  -  TI 2025")
 
-##-------------  End of display ------------------
+##------------------------------------------------------
+##------------------  End of display -------------------
 
 
